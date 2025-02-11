@@ -4,31 +4,50 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 require("dotenv").config();
-
 const register = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { firstname, lastname, phonenumber, alternate_phonenumber, email, alternate_email, password, confirm_password } = req.body;
+
+        if (password !== confirm_password) {
+            return res.status(400).json({ message: "Passwords do not match" });
+        }
+
         let user = await User.findOne({ email });
         if (user) return res.status(400).json({ message: "User already exists" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        user = new User({ name, email, password: hashedPassword });
-        await user.save();
+        user = new User({
+            firstname,
+            lastname,
+            phonenumber,
+            alternate_phonenumber: alternate_phonenumber || null,
+            email,
+            alternate_email: alternate_email || null,
+            password: hashedPassword
+        });
 
+        await user.save();
         res.status(201).json({ message: "User registered successfully" });
+
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
+
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email });
+
         if (!user) return res.status(404).json({ message: "User not found" });
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+
+        if (!process.env.JWT_SECRET) {
+            return res.status(500).json({ message: "JWT Secret is missing" });
+        }
 
         const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
         res.cookie("token", token, { httpOnly: true });
@@ -38,6 +57,7 @@ const login = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
 
 const logout = (req, res) => {
     res.clearCookie("token");
